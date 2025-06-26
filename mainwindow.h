@@ -23,6 +23,7 @@ private slots:
     void on_buildButton_clicked();
     void on_updateConfigButton_clicked();
     void on_flashSDButton_clicked();
+    void on_cleanButton_clicked();
 
     void handleScriptOutput();
     void handleScriptError();
@@ -43,6 +44,8 @@ private:
     void checkUnsavedChanges();
     void setSaveConfigHighlight(bool highlight);
     void loadScriptConfigIfExists();
+
+    void scanWifiNetworks();
 
     QString lastSavedSSID;
     QString lastSavedPass;

@@ -1,14 +1,39 @@
-#import RPi.GPIO as GPIO  # GPIO module disabled for testing
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 import time
 import uuid
 import socket
+import os
+import gpiod
+
 from signalrcore.hub_connection_builder import HubConnectionBuilder
 
-# === Configuratie ===
-GPIO_PIN = 10  # voorbeeld: pin 10 (GPIO15)
-HUB_URL = "http://192.168.1.78:5000/DataCaptatieHub"
-HUB_NAME = "DataCaptatieHub"
-METHOD_NAME = "BananaPiPinChanged"
+# === Read config from file ===
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "script_config.txt")
+
+def read_config(filename):
+    config = {}
+    try:
+        with open(filename, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if '=' in line:
+                    key, val = line.split("=", 1)
+                    config[key.strip()] = val.strip()
+    except FileNotFoundError:
+        print(f"Config file {filename} not found, using default values.")
+    return config
+
+config = read_config(CONFIG_FILE)
+
+# === Configuratie (use config or defaults) ===
+GPIO_PIN = int(config.get("GPIO_PIN", 17))  # LINE_OFFSET in gpiod terms
+CHIP_PATH = config.get("CHIP_PATH", "/dev/gpiochip0")
+HUB_URL = config.get("HUB_URL", "http://192.168.1.78:5000/DataCaptatieHub")
+HUB_NAME = config.get("HUB_NAME", "DataCaptatieHub")
+METHOD_NAME = config.get("METHOD_NAME", "BananaPiPinChanged")
 
 # === Uniek apparaat-ID ===
 def get_mac():
@@ -44,29 +69,35 @@ def send_signal():
     except Exception as e:
         print("Fout bij verzenden:", e)
 
-# === GPIO Setup (uitgeschakeld) ===
-# GPIO.setmode(GPIO.BCM)
-# GPIO.setup(GPIO_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+# === GPIO Setup with gpiod ===
+line_settings = gpiod.LineSettings(
+    edge_detection=gpiod.line.Edge.RISING,
+    bias=gpiod.line.Bias.PULL_DOWN
+)
 
-# def gpio_callback(channel):
-#     if GPIO.input(channel) == GPIO.HIGH:
-#         send_signal()
+with gpiod.request_lines(
+    CHIP_PATH,
+    config={GPIO_PIN: line_settings},
+    consumer="gpio-edge-watcher"
+) as request:
+    print(f"Verbonden met SignalR hub.")
+    hub_connection.start()
+    print(f"Wachten op rising edge op GPIO lijn {GPIO_PIN}...")
 
-# GPIO.add_event_detect(GPIO_PIN, GPIO.RISING, callback=gpio_callback, bouncetime=200)
-
-# === Start verbinding ===
-hub_connection.start()
-print("Verbonden met SignalR hub.")
-
-try:
-    print("Simuleer handmatig signaalverzending... (CTRL+C om te stoppen)")
-    while True:
-        time.sleep(5)
-        send_signal()  # Simuleer een signaal elke 5 seconden
-except KeyboardInterrupt:
-    print("Beëindigen...")
-finally:
-    hub_connection.stop()
-    # GPIO.cleanup()
-    print("Opgeruimd en klaar.")
-
+    try:
+        while True:
+            # wait_edge_events(timeout) waits in seconds, or None for infinite
+            if request.wait_edge_events():
+                events = request.read_edge_events()
+                for event in events:
+                    print("events: " +str(event) + "Event Type: " + str(event.event_type))
+                    if event.event_type == gpiod.EdgeEvent.Type.RISING_EDGE:
+                        print(f"Rising edge gedetecteerd op lijn {event.line_offset}!")
+                        send_signal()
+            else:
+                print("Geen event gedetecteerd in de laatste 10 seconden.")
+    except KeyboardInterrupt:
+        print("Beëindigen...")
+    finally:
+        hub_connection.stop()
+        print("Opgeruimd en klaar.")

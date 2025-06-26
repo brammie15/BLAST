@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QRegularExpression>
 #include <QSignalBlocker>
+#include <QProcess>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -16,13 +17,13 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // Setup process connections
     connect(process, &QProcess::readyReadStandardOutput, this, &MainWindow::handleScriptOutput);
     connect(process, &QProcess::readyReadStandardError, this, &MainWindow::handleScriptError);
     connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, &MainWindow::handleScriptFinished);
 
-    connect(ui->ssidLineEdit, &QLineEdit::textChanged, this, &MainWindow::checkUnsavedChanges);
+    // Connect the combo box editable text change to unsaved changes check
+    connect(ui->ssidComboBox->lineEdit(), &QLineEdit::textChanged, this, &MainWindow::checkUnsavedChanges);
     connect(ui->passwordLineEdit, &QLineEdit::textChanged, this, &MainWindow::checkUnsavedChanges);
     connect(ui->scriptTextEdit, &QTextEdit::textChanged, this, &MainWindow::checkUnsavedChanges);
     connect(ui->updateConfigButton, &QPushButton::clicked, this, &MainWindow::on_updateConfigButton_clicked);
@@ -33,10 +34,48 @@ MainWindow::MainWindow(QWidget *parent)
 
     QString configPath = scriptsDir + "/config.txt";
     if (QFile::exists(configPath)) {
+        appendOutput("Loading initial config from: " + configPath); // ⬅ Logging
         loadConfigFile(configPath);
     }
 
     loadScriptConfigIfExists();
+
+    // Scan for wifi networks and populate combo box
+    scanWifiNetworks();
+}
+
+void MainWindow::scanWifiNetworks() {
+    // Clear current list but keep the current text
+    QString currentText = ui->ssidComboBox->currentText();
+    ui->ssidComboBox->clear();
+
+    QProcess nmcliProcess;
+    nmcliProcess.start("nmcli", QStringList() << "-t" << "-f" << "SSID" << "device" << "wifi" << "list");
+    nmcliProcess.waitForFinished(3000);
+    QString output = nmcliProcess.readAllStandardOutput();
+
+    // Parse SSIDs (one per line, ignore empty lines)
+    QStringList ssids;
+    for (const QString &line : output.split('\n')) {
+        QString ssid = line.trimmed();
+        if (!ssid.isEmpty() && !ssids.contains(ssid)) {
+            ssids.append(ssid);
+        }
+    }
+
+    // Add SSIDs to combo box
+    ui->ssidComboBox->addItems(ssids);
+
+    // Restore previously typed/selected text if still available
+    if (!currentText.isEmpty()) {
+        int index = ui->ssidComboBox->findText(currentText);
+        if (index >= 0) {
+            ui->ssidComboBox->setCurrentIndex(index);
+        } else {
+            // Keep custom text
+            ui->ssidComboBox->setEditText(currentText);
+        }
+    }
 }
 
 MainWindow::~MainWindow() {
@@ -54,24 +93,29 @@ void MainWindow::on_browseScriptsButton_clicked() {
             appendOutput("Existing config.txt found, trying to load values.");
             loadConfigFile(configPath);
             loadScriptConfigIfExists();
+        } else {
+            appendOutput("No config.txt found in selected folder.");
         }
     }
 }
 
 void MainWindow::on_saveConfigButton_clicked() {
-    if (scriptsFolderPath.isEmpty()) {
-        QMessageBox::warning(this, "Missing Folder", "Please select a scripts folder first.");
+    if (!QDir(scriptsFolderPath).exists()) {
+        QMessageBox::warning(this, "Missing Folder", "The selected scripts folder does not exist.");
+        appendOutput("Error: The selected scripts folder does not exist.");
         return;
     }
 
     QFile configFile(configTxtPath());
     if (configFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out(&configFile);
-        out << "WIFI_SSID=" << ui->ssidLineEdit->text() << '\n';
+        out << "WIFI_SSID=" << ui->ssidComboBox->currentText() << '\n';
         out << "WIFI_PASS=" << ui->passwordLineEdit->text() << '\n';
         configFile.close();
+        appendOutput("Saved config.txt successfully.");
     } else {
         QMessageBox::critical(this, "Error", "Failed to write config.txt");
+        appendOutput("Failed to write config.txt");
         return;
     }
 
@@ -81,16 +125,20 @@ void MainWindow::on_saveConfigButton_clicked() {
         out << ui->scriptTextEdit->toPlainText();
         scriptFile.close();
 
-        lastSavedSSID = ui->ssidLineEdit->text();
+        lastSavedSSID = ui->ssidComboBox->currentText();
         lastSavedPass = ui->passwordLineEdit->text();
         lastSavedScript = ui->scriptTextEdit->toPlainText();
         setSaveConfigHighlight(false);
+
+        appendOutput("Saved script_config.txt successfully.");
     } else {
         QMessageBox::critical(this, "Error", "Failed to write script_config.txt");
+        appendOutput("Failed to write script_config.txt");
         return;
     }
 
     QMessageBox::information(this, "Success", "Configuration saved.");
+    appendOutput("Configuration saved successfully.");
 }
 
 void MainWindow::on_updateConfigButton_clicked() {
@@ -104,10 +152,11 @@ void MainWindow::on_updateConfigButton_clicked() {
     QString script = scriptsFolderPath + "/change_config.sh";
     if (!QFileInfo::exists(script) || !QFileInfo(script).isExecutable()) {
         QMessageBox::critical(this, "Error", "Script not found or not executable:\n" + script);
+        appendOutput("Script missing or not executable: " + script);
         return;
     }
 
-    ui->outputTextEdit->append("Running change_config.sh...\n");
+    appendOutput("Running change_config.sh...");
     process->setWorkingDirectory(scriptsFolderPath);
     process->start("pkexec", QStringList() << script);
 }
@@ -118,6 +167,7 @@ void MainWindow::on_buildButton_clicked() {
     QString configPath = scriptsPath + "/config.txt";
     if (!QFile::exists(configPath)) {
         QMessageBox::critical(this, "Error", "config.txt not found in scripts folder:\n" + configPath);
+        appendOutput("Error: config.txt not found at: " + configPath);
         return;
     }
 
@@ -125,6 +175,7 @@ void MainWindow::on_buildButton_clicked() {
     QFileInfo fi(scriptFile);
     if (!fi.isExecutable()) {
         QMessageBox::critical(this, "Error", "Script is not executable:\n" + scriptFile);
+        appendOutput("Error: build_image.sh is not executable: " + scriptFile);
         return;
     }
 
@@ -132,19 +183,19 @@ void MainWindow::on_buildButton_clicked() {
     process->setWorkingDirectory(scriptsPath);
 
     ui->outputTextEdit->clear();
-    ui->outputTextEdit->append("Starting build...\n");
+    appendOutput("Starting build...");
 
     connect(process, &QProcess::readyReadStandardOutput, [this, process]() {
-        ui->outputTextEdit->append(QString::fromUtf8(process->readAllStandardOutput()));
+        appendOutput(process->readAllStandardOutput());
     });
 
     connect(process, &QProcess::readyReadStandardError, [this, process]() {
-        ui->outputTextEdit->append(QString::fromUtf8(process->readAllStandardError()));
+        appendOutput(process->readAllStandardError());
     });
 
     connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             [this](int exitCode, QProcess::ExitStatus exitStatus){
-                ui->outputTextEdit->append(QString("\nScript finished with exit code %1.").arg(exitCode));
+                appendOutput(QString("\nScript finished with exit code %1.").arg(exitCode));
             });
 
     process->start("pkexec", QStringList() << scriptFile);
@@ -183,53 +234,59 @@ QString MainWindow::scriptPath() const {
 
 void MainWindow::loadConfigFile(const QString& configPath) {
     QFile file(configPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)){
-        appendOutput("Config file not found :(");
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        appendOutput("Failed to open config.txt");
         return;
     }
+
     QTextStream in(&file);
-    QString content = in.readAll();
-
-    QRegularExpression ssidRegex(R"(WIFI_SSID\s*=\s*(.+)$)", QRegularExpression::MultilineOption);
-    QRegularExpression passRegex(R"(WIFI_PASS\s*=\s*(.+)$)", QRegularExpression::MultilineOption);
-
-    const QSignalBlocker blocker1(ui->ssidLineEdit);
-    const QSignalBlocker blocker2(ui->passwordLineEdit);
-
-    auto ssidMatch = ssidRegex.match(content);
-    if (ssidMatch.hasMatch()) {
-        QString ssid = ssidMatch.captured(1);
-        ui->ssidLineEdit->setText(ssid);
-        lastSavedSSID = ssid;
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        if (line.startsWith("WIFI_SSID=")) {
+            QString ssid = line.mid(QString("WIFI_SSID=").length());
+            ui->ssidComboBox->setCurrentText(ssid);
+        } else if (line.startsWith("WIFI_PASS=")) {
+            QString pass = line.mid(QString("WIFI_PASS=").length());
+            ui->passwordLineEdit->setText(pass);
+        }
     }
+    file.close();
 
-    auto passMatch = passRegex.match(content);
-    if (passMatch.hasMatch()) {
-        QString pass = passMatch.captured(1);
-        ui->passwordLineEdit->setText(pass);
-        lastSavedPass = pass;
-    }
+    // Save loaded state for change tracking
+    lastSavedSSID = ui->ssidComboBox->currentText();
+    lastSavedPass = ui->passwordLineEdit->text();
 }
+
 
 void MainWindow::loadScriptConfigIfExists() {
     QString path = scriptConfigTxtPath();
     QFile file(path);
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        const QSignalBlocker blocker(ui->scriptTextEdit);
-        ui->scriptTextEdit->setPlainText(file.readAll());
-        file.close();
-        lastSavedScript = ui->scriptTextEdit->toPlainText();
+    if (!file.exists()) {
+        appendOutput("No script_config.txt found.");
+        return;
     }
+
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        appendOutput("Failed to open script_config.txt");
+        return;
+    }
+
+    QString content = file.readAll();
+    file.close();
+
+    ui->scriptTextEdit->setPlainText(content);
+    lastSavedScript = content;
 }
 
 void MainWindow::checkUnsavedChanges() {
-    setSaveConfigHighlight(hasUnsavedChanges());
+    bool changed = hasUnsavedChanges();
+    setSaveConfigHighlight(changed);
 }
 
 bool MainWindow::hasUnsavedChanges() const {
-    return ui->ssidLineEdit->text() != lastSavedSSID ||
-           ui->passwordLineEdit->text() != lastSavedPass ||
-           ui->scriptTextEdit->toPlainText() != lastSavedScript;
+    return (lastSavedSSID != ui->ssidComboBox->currentText()) ||
+           (lastSavedPass != ui->passwordLineEdit->text()) ||
+           (lastSavedScript != ui->scriptTextEdit->toPlainText());
 }
 
 void MainWindow::setSaveConfigHighlight(bool highlight) {
@@ -242,4 +299,20 @@ void MainWindow::on_flashSDButton_clicked() {
     flashWindow->setAttribute(Qt::WA_DeleteOnClose);
     flashWindow->setScriptsFolderPath(scriptsFolderPath);
     flashWindow->exec();
+    appendOutput("Launched SD flashing dialog.");
 }
+
+void MainWindow::on_cleanButton_clicked(){
+    QString script = scriptsFolderPath + "/clean.sh";
+
+    if (!QFileInfo::exists(script) || !QFileInfo(script).isExecutable()) {
+        QMessageBox::critical(this, "Error", "Script not found or not executable:\n" + script);
+        appendOutput("Script missing or not executable: " + script);
+        return;
+    }
+
+    appendOutput("Cleaning scripts folder...");
+    process->setWorkingDirectory(scriptsFolderPath);
+    process->start("pkexec", QStringList() << script);
+}
+
