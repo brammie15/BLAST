@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>FlashSDWindow</class>
+ <widget class="QWidget" name="FlashSDWindow">
+  <property name="windowTitle">
+   <string>Flash SD Card</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="label">
+     <property name="text">
+      <string>Select SD Card Device:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QComboBox" name="deviceComboBox"/>
+   </item>
+   <item>
+    <widget class="QPushButton" name="refreshButton">
+     <property name="text">
+      <string>Refresh</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="flashButton">
+     <property name="text">
+      <string>Flash</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTextEdit" name="outputTextEdit">
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>300</width>
+       <height>150</height>
+      </size>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

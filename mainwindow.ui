@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1200</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>(BLAST) Bootable Linux Assembler &amp; Setup Tool</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="horizontalLayout_main">
+    <item>
+     <layout class="QVBoxLayout" name="verticalLayout_leftSettings">
+      <item>
+       <widget class="QGroupBox" name="groupBox_scriptsFolder">
+        <property name="title">
+         <string>Scripts Folder</string>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_scriptsFolder">
+         <item>
+          <widget class="QLineEdit" name="scriptsPathLineEdit">
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="browseScriptsButton">
+           <property name="text">
+            <string>Browse...</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox_wifiSettings">
+        <property name="title">
+         <string>WiFi Settings - config.txt</string>
+        </property>
+        <layout class="QFormLayout" name="formLayout_wifi">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_ssid">
+           <property name="text">
+            <string>SSID</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="ssidLineEdit"/>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_password">
+           <property name="text">
+            <string>Password</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="passwordLineEdit"/>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox_scriptConfig">
+        <property name="title">
+         <string>Script Config file</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_script">
+         <item>
+          <widget class="QTextEdit" name="scriptTextEdit"/>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout_buttons">
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_buttons_top">
+          <item>
+           <widget class="QPushButton" name="saveConfigButton">
+            <property name="text">
+             <string>Save Configs</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="buildButton">
+            <property name="text">
+             <string>Build Image</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_buttons_bottom">
+          <item>
+           <widget class="QPushButton" name="updateConfigButton">
+            <property name="text">
+             <string>Update Config</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="cleanButton">
+            <property name="text">
+             <string>Clean</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_buttons_extra">
+          <item>
+           <widget class="QPushButton" name="flashSDButton">
+            <property name="text">
+             <string>Flash to SD Card</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="emptyButton"/>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QTextEdit" name="outputTextEdit">
+      <property name="readOnly">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
